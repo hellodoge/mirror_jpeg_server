@@ -1,0 +1,212 @@
+#include <chrono>
+#include <string_view>
+
+// converting between std::string_view and boost::string_view is trivial
+// but creates a mess, option exists for compatibility
+#define BOOST_BEAST_USE_STD_STRING_VIEW
+#include <boost/beast.hpp>
+#include <boost/beast/http.hpp>
+
+#include "logger.hpp"
+#include "http_server.hpp"
+
+using namespace server;
+using namespace size_literals;
+using namespace std::chrono_literals;
+
+namespace http = boost::beast::http;
+using tcp = boost::asio::ip::tcp;
+
+namespace {
+    enum TaskErrorType {
+        BadRequest,
+        Internal,
+    };
+
+    struct TaskCallbacks {
+        std::function<void(std::vector<uint8_t>)> success;
+        std::function<void(TaskErrorType, std::string_view)> error;
+    };
+
+    using enqueue_task_func_type = std::function<void(handler::bytes_span, TaskCallbacks)>;
+
+    struct TaskConfig {
+        std::chrono::seconds timeout = default_timeout;
+        size_t max_request_size = default_max_request_size;
+        enqueue_task_func_type enqueue_task;
+        std::string_view mime_type;
+    };
+
+    class Task : public std::enable_shared_from_this<Task> {
+    public:
+        explicit Task(tcp::socket socket, TaskConfig &config)
+            : config {config}
+            , socket {std::move(socket)}
+            , timeout {socket.get_executor(), config.timeout}
+            , enqueue_task_callback {config.enqueue_task} {
+
+            request_parser.body_limit(config.max_request_size);
+        }
+
+        void run() {
+            auto self = shared_from_this();
+            timeout.async_wait([self](boost::system::error_code ec){
+                self->socket.close();
+            });
+            get_request();
+        }
+
+    private:
+
+        // non blocking
+        void get_request() {
+            auto self = shared_from_this();
+
+            http::async_read(socket, buffer, request_parser,
+                             [self](boost::system::error_code ec, size_t){
+                if (ec.failed()) {
+                    Logger::log(self->socket.remote_endpoint(),
+                                ": error while reading request: ", ec.message());
+                    self->shutdown();
+                    return;
+                }
+                self->enqueue_task();
+            });
+        }
+
+        void enqueue_task() {
+            auto self = shared_from_this();
+
+            TaskCallbacks callbacks {
+                .success = [self](std::vector<uint8_t> response_data){
+                    self->task_success(std::move(response_data));
+                },
+                .error = [self](TaskErrorType type, std::string_view message){
+                    self->task_failed(type, message);
+                }
+            };
+
+            handler::bytes_span body {
+                request_parser.get().body()
+            };
+
+            enqueue_task_callback(body, callbacks);
+        }
+
+        void task_success(std::vector<uint8_t> response_data) {
+            Logger::log(socket.remote_endpoint(), ": processed successfully");
+
+            if (!config.mime_type.empty())
+                response.set(http::field::content_type, config.mime_type);
+            response.body() = std::move(response_data);
+            response.prepare_payload(); // set Content-Length etc
+            send_response();
+        }
+
+        void task_failed(TaskErrorType type, std::string_view message) {
+            Logger::log(socket.remote_endpoint(),
+                        ": error while processing: ", message);
+
+            if (type == BadRequest) {
+                response.result(http::status::bad_request);
+
+                response.body() = std::vector<uint8_t>(message.size() + 1 /* for newline*/);
+                std::copy(message.begin(), message.end(), response.body().begin());
+                response.body().push_back(static_cast<uint8_t>('\n'));
+            } else {
+                response.result(http::status::internal_server_error);
+
+                std::string_view user_message = "internal server error\n";
+                response.body() = std::vector<uint8_t>(user_message.begin(),
+                                                       user_message.end());
+            }
+            response.set(http::field::content_type, "text/plain");
+            response.prepare_payload(); // set Content-Length etc
+            send_response();
+        }
+
+        // non blocking
+        void send_response() {
+            auto self = shared_from_this();
+
+            http::async_write(socket, response,
+                              [self](boost::system::error_code ec, size_t){
+                if (ec.failed())
+                    Logger::log(self->socket.remote_endpoint(),
+                                ": error while sending response: ", ec.message());
+                self->shutdown();
+            });
+        }
+
+        void shutdown() {
+            Logger::log(socket.remote_endpoint(), ": closing connection");
+            timeout.cancel();
+            socket.shutdown(boost::asio::socket_base::shutdown_both);
+        }
+
+    private:
+        TaskConfig &config;
+        tcp::socket socket;
+        boost::asio::steady_timer timeout;
+        enqueue_task_func_type enqueue_task_callback;
+
+        boost::beast::flat_buffer buffer { 4_KiB }; // used for reading request
+        http::request_parser<http::vector_body<uint8_t>> request_parser;
+        http::response<http::vector_body<uint8_t>> response;
+    };
+}
+
+void accept(tcp::acceptor &acceptor, TaskConfig &config) {
+    if (!acceptor.is_open())
+        return;
+    acceptor.async_accept([&](boost::system::error_code ec, tcp::socket socket) {
+        accept(acceptor, config);
+        if (ec.failed()) {
+            Logger::log("error while accepting: ", ec.message());
+        } else {
+            Logger::log("new connection from ", socket.remote_endpoint());
+            std::make_shared<Task>(std::move(socket), config)->run();
+        }
+    });
+}
+
+constexpr unsigned default_threads_count = 8;
+
+void HttpServer::run() {
+    std::unique_lock lock(running_mutex, std::try_to_lock);
+    if (!lock.owns_lock())
+        throw std::runtime_error("attempt to run server while it is already running");
+
+    const unsigned cpu_threads_count = std::thread::hardware_concurrency();
+    const unsigned num_threads = cpu_threads_count != 0 ? cpu_threads_count : default_threads_count;
+    boost::asio::thread_pool pool(num_threads);
+
+    auto enqueue_task_callback = [this, &pool](handler::bytes_span request, TaskCallbacks callback){
+        boost::asio::post(pool, [this, request, callback=std::move(callback)](){
+            try {
+                auto result = handler.handle(request);
+                callback.success(result);
+            } catch (std::exception &e) {
+                callback.error(Internal, e.what());
+            }
+        });
+    };
+
+    TaskConfig taskConfig {
+        .timeout = config.timeout,
+        .max_request_size = config.max_request_size,
+        .enqueue_task = enqueue_task_callback
+    };
+
+    tcp::acceptor acceptor {context, tcp::endpoint(tcp::v4(), config.port)};
+    accept(acceptor, taskConfig);
+
+    // TODO graceful shutdown
+    context.run();
+    acceptor.close();
+    pool.join();
+}
+
+void HttpServer::stop() {
+    context.stop();
+}
