@@ -12,20 +12,21 @@
 
 class Logger {
 private:
-    // TODO really strange bug, output looks like [20:32736:1155534048]
-    static auto get_time_prefix() {
+    static void print_time_prefix() {
         auto unix_time = std::time(nullptr);
         std::tm time {};
         // std::localtime is not thread safe
+        // we have locked the static mutex, but still cannot guarantee that std::localtime
+        // won't be used by other component of the project in other thread
         localtime_r(&unix_time, &time);
-        return std::put_time(&time, "[%T]: ");
+        std::cout << std::put_time(&time, "[%T]: ");
     }
 
 public:
     template <typename ...Args>
     static void log(Args ...args) {
         std::lock_guard lock {mutex};
-        std::cout << get_time_prefix();
+        print_time_prefix();
         (std::cout << ... << args);
         std::cout << std::endl;
     }
