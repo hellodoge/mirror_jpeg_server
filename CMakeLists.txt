@@ -19,4 +19,4 @@ set(SOURCES_HANDLER_MIRROR_JPEG
 
 add_executable(mirror_jpeg_server src/main.cpp ${SOURCES_HTTP_SERVER} ${SOURCES_HANDLER_MIRROR_JPEG})
 
-target_link_libraries(mirror_jpeg_server pthread)
+target_link_libraries(mirror_jpeg_server pthread jpeg)
