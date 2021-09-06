@@ -7,7 +7,7 @@
 #include <boost/beast.hpp>
 #include <boost/beast/http.hpp>
 
-#include "logger.hpp"
+#include "util/logger.hpp"
 #include "http_server.hpp"
 
 using namespace server;
