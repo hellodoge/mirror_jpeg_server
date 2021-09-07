@@ -1,3 +1,4 @@
+#include <cstring>
 #include <cstdio> // https://github.com/libjpeg-turbo/libjpeg-turbo/issues/17
 using FILE = std::FILE;
 using size_t = std::size_t;
@@ -22,10 +23,32 @@ struct Jpeg {
 
 Jpeg decompress_jpeg(bytes_span compressed);
 std::vector<uint8_t> compress_jpeg(Jpeg &image);
+static void mirror_image(Jpeg &image);
 
 auto MirrorJPEGHandler::handle(bytes_span input_jpeg) -> std::vector<uint8_t> {
-    auto image = decompress_jpeg(input_jpeg);
+    Jpeg image = decompress_jpeg(input_jpeg);
+    mirror_image(image);
     return compress_jpeg(image);
+}
+
+static void mirror_image(Jpeg &image) {
+    uint8_t *image_data = image.buffer.data();
+    for (unsigned current_row = 0; current_row < image.height; current_row++) {
+        // warning: VLA may not be supported by some compilers
+        using pixel = uint8_t[image.pixel_size];
+        pixel *first = ((pixel *)image_data) + image.width * current_row;
+        pixel *last = first + image.width - 1;
+        // std::reverse cannot be used here, because pixel is VLA
+        while (first < last) {
+            pixel tmp;
+            // we cannot just assign arrays
+            std::memcpy(&tmp, first, sizeof(pixel));
+            std::memcpy(first, last, sizeof(pixel));
+            std::memcpy(last, tmp, sizeof(pixel));
+            first++;
+            last--;
+        }
+    }
 }
 
 static std::string get_error_message(j_common_ptr err_info);
