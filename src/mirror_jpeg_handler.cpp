@@ -40,11 +40,13 @@ static void mirror_image(Jpeg &image) {
         pixel *last = first + image.width - 1;
         // std::reverse cannot be used here, because pixel is VLA
         while (first < last) {
-            pixel tmp;
             // we cannot just assign arrays
-            std::memcpy(&tmp, first, sizeof(pixel));
-            std::memcpy(first, last, sizeof(pixel));
-            std::memcpy(last, tmp, sizeof(pixel));
+            for (size_t i = 0; i < sizeof(pixel); i++) {
+                uint8_t tmp;
+                tmp = (*first)[i];
+                (*first)[i] = (*last)[i];
+                (*last)[i] = tmp;
+            }
             first++;
             last--;
         }
