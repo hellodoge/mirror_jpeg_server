@@ -38,6 +38,9 @@ namespace {
     };
 
     class Task : public std::enable_shared_from_this<Task> {
+
+        using clock = std::chrono::system_clock;
+
     public:
         explicit Task(tcp::socket socket, TaskConfig &config)
             : config {config}
@@ -90,11 +93,14 @@ namespace {
                 request_parser.get().body()
             };
 
+            enqueued_at = clock::now();
             enqueue_task_callback(body, callbacks);
         }
 
         void task_success(std::vector<uint8_t> response_data) {
-            Logger::log(socket.remote_endpoint(), ": processed successfully");
+            using milliseconds = std::chrono::milliseconds;
+            auto in_ms = std::chrono::duration_cast<milliseconds>(clock::now() - enqueued_at);
+            Logger::log(socket.remote_endpoint(), ": processed successfully in ", in_ms.count(), "ms");
 
             if (!config.mime_type.empty())
                 response.set(http::field::content_type, config.mime_type);
@@ -149,6 +155,7 @@ namespace {
         tcp::socket socket;
         boost::asio::steady_timer timeout;
         enqueue_task_func_type enqueue_task_callback;
+        std::chrono::time_point<clock> enqueued_at {};
 
         boost::beast::flat_buffer buffer { 4_KiB }; // used for reading request
         http::request_parser<http::vector_body<uint8_t>> request_parser;
