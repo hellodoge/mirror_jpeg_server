@@ -151,8 +151,15 @@ namespace {
 
         void shutdown() {
             logger.log(Logger::Debug, endpoint, ": closing connection");
-            timeout.cancel();
-            socket.shutdown(boost::asio::socket_base::shutdown_both);
+
+            boost::system::error_code ec;
+            timeout.cancel(ec);
+            if (ec.failed())
+                logger.log(Logger::Debug, endpoint, ": cancel timeout error: ", ec.message());
+
+            socket.shutdown(boost::asio::socket_base::shutdown_both, ec);
+            if (ec.failed())
+                logger.log(Logger::Debug, endpoint, ": shutdown error: ", ec.message());
         }
 
     private:
