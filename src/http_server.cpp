@@ -119,20 +119,16 @@ namespace {
         void task_failed(TaskErrorType type, std::string_view message) {
             logger.log(endpoint, ": error while processing: ", message);
 
-            if (type == BadRequest) {
+            if (type == Internal)
+                response.result(http::status::internal_server_error);
+            else if (type == BadRequest)
                 response.result(http::status::bad_request);
 
-                response.body() = std::vector<uint8_t>(message.size() + 1 /* for newline*/);
-                std::copy(message.begin(), message.end(), response.body().begin());
-                response.body().push_back(static_cast<uint8_t>('\n'));
-            } else {
-                response.result(http::status::internal_server_error);
-
-                std::string_view user_message = "internal server error\n";
-                response.body() = std::vector<uint8_t>(user_message.begin(),
-                                                       user_message.end());
-            }
             response.set(http::field::content_type, "text/plain");
+            response.body() = std::vector<uint8_t>(message.size() + 1 /* for newline*/);
+            std::copy(message.begin(), message.end(), response.body().begin());
+            response.body().push_back(static_cast<uint8_t>('\n'));
+
             response.prepare_payload(); // set Content-Length etc
             send_response();
         }
@@ -213,8 +209,11 @@ void HttpServer::run() {
             try {
                 auto result = handler.handle(request);
                 callback.success(result);
+            } catch (handler::handling_error &e) {
+                callback.error(BadRequest, e.what());
             } catch (std::exception &e) {
-                callback.error(Internal, e.what());
+                callback.error(Internal, "internal server error");
+                logger.log(Logger::Error, "internal error: ", e.what());
             }
         });
     };
