@@ -222,6 +222,7 @@ void HttpServer::run() {
         .timeout = config.timeout,
         .max_request_size = config.max_request_size,
         .enqueue_task = enqueue_task_callback,
+        .mime_type = config.http.mime_type,
         .logger = logger
     };
 
