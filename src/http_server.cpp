@@ -174,9 +174,15 @@ void accept(tcp::acceptor &acceptor, TaskConfig &config) {
         accept(acceptor, config);
         if (ec.failed()) {
             Logger::log("error while accepting: ", ec.message());
-        } else {
+            return;
+        }
+        try {
+            // socket.remote_endpoint can throw system_error
             Logger::log("new connection from ", socket.remote_endpoint());
+            // Task constructor can also throw error
             std::make_shared<Task>(std::move(socket), config)->run();
+        } catch (std::exception &e) {
+            Logger::log("error creating task ", e.what());
         }
     });
 }
