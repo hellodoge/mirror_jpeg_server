@@ -7,14 +7,16 @@
 
 #include "server_config.hpp"
 #include "handler_interface.hpp"
+#include "util/logger.hpp"
 
 namespace server {
 
     class HttpServer {
     public:
-        explicit HttpServer(handler::IHandler &handler, ServerConfig config)
-            : config{config}
-            , handler{handler} {}
+        explicit HttpServer(handler::IHandler &handler, ServerConfig config, Logger &logger)
+            : config {config}
+            , handler {handler}
+            , logger {logger} {}
 
         void run();
         void stop();
@@ -24,6 +26,7 @@ namespace server {
         ServerConfig config;
         handler::IHandler &handler;
         boost::asio::io_context context{};
+        Logger &logger;
     };
 
 }

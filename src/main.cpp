@@ -1,5 +1,6 @@
 #include "http_server.hpp"
 #include "mirror_jpeg_handler.hpp"
+#include "util/logger.hpp"
 
 int main() {
     server::ServerConfig config {
@@ -7,7 +8,8 @@ int main() {
                 .mime_type="image/jpeg"
         }
     };
+    Logger logger {};
     handler::MirrorJPEGHandler handler {};
-    server::HttpServer server {handler, config};
+    server::HttpServer server {handler, config, logger};
     server.run();
 }

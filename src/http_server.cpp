@@ -39,6 +39,7 @@ namespace {
         size_t max_request_size = default_max_request_size;
         enqueue_task_func_type enqueue_task;
         std::string_view mime_type;
+        Logger &logger;
     };
 
     // class responsible to handle IO operations with a client
@@ -52,7 +53,8 @@ namespace {
             , socket {std::move(socket)}
             , endpoint {this->socket.remote_endpoint()}
             , timeout {socket.get_executor(), config.timeout}
-            , enqueue_task_callback {config.enqueue_task} {
+            , enqueue_task_callback {config.enqueue_task}
+            , logger {config.logger} {
 
             request_parser.body_limit(config.max_request_size);
         }
@@ -74,7 +76,7 @@ namespace {
             http::async_read(socket, buffer, request_parser,
                              [self](boost::system::error_code ec, size_t){
                 if (ec.failed()) {
-                    Logger::log(self->endpoint, ": error while reading request: ", ec.message());
+                    self->logger.log(self->endpoint, ": error while reading request: ", ec.message());
                     self->shutdown();
                     return;
                 }
@@ -105,7 +107,7 @@ namespace {
         void task_success(std::vector<uint8_t> response_data) {
             using milliseconds = std::chrono::milliseconds;
             auto in_ms = std::chrono::duration_cast<milliseconds>(clock::now() - enqueued_at);
-            Logger::log(endpoint, ": processed successfully in ", in_ms.count(), "ms");
+            logger.log(endpoint, ": processed successfully in ", in_ms.count(), "ms");
 
             if (!config.mime_type.empty())
                 response.set(http::field::content_type, config.mime_type);
@@ -115,7 +117,7 @@ namespace {
         }
 
         void task_failed(TaskErrorType type, std::string_view message) {
-            Logger::log(endpoint, ": error while processing: ", message);
+            logger.log(endpoint, ": error while processing: ", message);
 
             if (type == BadRequest) {
                 response.result(http::status::bad_request);
@@ -142,18 +144,19 @@ namespace {
             http::async_write(socket, response,
                               [self](boost::system::error_code ec, size_t){
                 if (ec.failed())
-                    Logger::log(self->endpoint, ": error while sending response: ", ec.message());
+                    self->logger.log(self->endpoint, ": error while sending response: ", ec.message());
                 self->shutdown();
             });
         }
 
         void shutdown() {
-            Logger::log(endpoint, ": closing connection");
+            logger.log(Logger::Debug, endpoint, ": closing connection");
             timeout.cancel();
             socket.shutdown(boost::asio::socket_base::shutdown_both);
         }
 
     private:
+        Logger &logger;
         TaskConfig &config;
         tcp::socket socket;
         tcp::endpoint endpoint;
@@ -167,22 +170,22 @@ namespace {
     };
 }
 
-void accept(tcp::acceptor &acceptor, TaskConfig &config) {
+void accept(tcp::acceptor &acceptor, TaskConfig &config, Logger &logger) {
     if (!acceptor.is_open())
         return;
     acceptor.async_accept([&](boost::system::error_code ec, tcp::socket socket) {
-        accept(acceptor, config);
+        accept(acceptor, config, logger);
         if (ec.failed()) {
-            Logger::log("error while accepting: ", ec.message());
+            logger.log("error while accepting: ", ec.message());
             return;
         }
         try {
             // socket.remote_endpoint can throw system_error
-            Logger::log("new connection from ", socket.remote_endpoint());
+            logger.log(Logger::Debug, "new connection from ", socket.remote_endpoint());
             // Task constructor can also throw error
             std::make_shared<Task>(std::move(socket), config)->run();
         } catch (std::exception &e) {
-            Logger::log("error creating task ", e.what());
+            logger.log("error creating task ", e.what());
         }
     });
 }
@@ -212,11 +215,12 @@ void HttpServer::run() {
     TaskConfig taskConfig {
         .timeout = config.timeout,
         .max_request_size = config.max_request_size,
-        .enqueue_task = enqueue_task_callback
+        .enqueue_task = enqueue_task_callback,
+        .logger = logger
     };
 
     tcp::acceptor acceptor {context, tcp::endpoint(tcp::v4(), config.port)};
-    accept(acceptor, taskConfig);
+    accept(acceptor, taskConfig, logger);
 
     // TODO graceful shutdown
     context.run();
