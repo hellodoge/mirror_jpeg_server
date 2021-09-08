@@ -47,9 +47,10 @@ namespace {
         using clock = std::chrono::system_clock;
 
     public:
-        explicit Task(tcp::socket socket, TaskConfig &config)
+        explicit Task(tcp::socket socket, TaskConfig &config) noexcept(false)
             : config {config}
             , socket {std::move(socket)}
+            , endpoint {this->socket.remote_endpoint()}
             , timeout {socket.get_executor(), config.timeout}
             , enqueue_task_callback {config.enqueue_task} {
 
@@ -73,8 +74,7 @@ namespace {
             http::async_read(socket, buffer, request_parser,
                              [self](boost::system::error_code ec, size_t){
                 if (ec.failed()) {
-                    Logger::log(self->socket.remote_endpoint(),
-                                ": error while reading request: ", ec.message());
+                    Logger::log(self->endpoint, ": error while reading request: ", ec.message());
                     self->shutdown();
                     return;
                 }
@@ -105,7 +105,7 @@ namespace {
         void task_success(std::vector<uint8_t> response_data) {
             using milliseconds = std::chrono::milliseconds;
             auto in_ms = std::chrono::duration_cast<milliseconds>(clock::now() - enqueued_at);
-            Logger::log(socket.remote_endpoint(), ": processed successfully in ", in_ms.count(), "ms");
+            Logger::log(endpoint, ": processed successfully in ", in_ms.count(), "ms");
 
             if (!config.mime_type.empty())
                 response.set(http::field::content_type, config.mime_type);
@@ -115,8 +115,7 @@ namespace {
         }
 
         void task_failed(TaskErrorType type, std::string_view message) {
-            Logger::log(socket.remote_endpoint(),
-                        ": error while processing: ", message);
+            Logger::log(endpoint, ": error while processing: ", message);
 
             if (type == BadRequest) {
                 response.result(http::status::bad_request);
@@ -143,14 +142,13 @@ namespace {
             http::async_write(socket, response,
                               [self](boost::system::error_code ec, size_t){
                 if (ec.failed())
-                    Logger::log(self->socket.remote_endpoint(),
-                                ": error while sending response: ", ec.message());
+                    Logger::log(self->endpoint, ": error while sending response: ", ec.message());
                 self->shutdown();
             });
         }
 
         void shutdown() {
-            Logger::log(socket.remote_endpoint(), ": closing connection");
+            Logger::log(endpoint, ": closing connection");
             timeout.cancel();
             socket.shutdown(boost::asio::socket_base::shutdown_both);
         }
@@ -158,6 +156,7 @@ namespace {
     private:
         TaskConfig &config;
         tcp::socket socket;
+        tcp::endpoint endpoint;
         boost::asio::steady_timer timeout;
         enqueue_task_func_type enqueue_task_callback;
         std::chrono::time_point<clock> enqueued_at {};
