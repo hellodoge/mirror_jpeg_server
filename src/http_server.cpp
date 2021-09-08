@@ -18,16 +18,20 @@ namespace http = boost::beast::http;
 using tcp = boost::asio::ip::tcp;
 
 namespace {
+    // used by Task to distinguish if processing error was internal
+    // or something was wrong with request
     enum TaskErrorType {
         BadRequest,
         Internal,
     };
 
+    // worker threads use these callbacks to set server response
     struct TaskCallbacks {
         std::function<void(std::vector<uint8_t>)> success;
         std::function<void(TaskErrorType, std::string_view)> error;
     };
 
+    // used by Task class to enqueue requested task to worker thread
     using enqueue_task_func_type = std::function<void(handler::bytes_span, TaskCallbacks)>;
 
     struct TaskConfig {
@@ -37,6 +41,7 @@ namespace {
         std::string_view mime_type;
     };
 
+    // class responsible to handle IO operations with a client
     class Task : public std::enable_shared_from_this<Task> {
 
         using clock = std::chrono::system_clock;
