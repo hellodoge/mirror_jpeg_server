@@ -3,6 +3,7 @@ project(mirror_jpeg_server)
 
 set(CMAKE_CXX_STANDARD 17)
 
+find_package(JPEG REQUIRED)
 find_package(Boost 1.76.0 REQUIRED)
 
 include_directories(include)
