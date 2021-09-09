@@ -9,7 +9,7 @@ int main() {
                 .mime_type="image/jpeg"
         }
     };
-    Logger logger {};
+    Logger logger {std::cout};
     handler::MirrorJPEGHandler handler {};
     server::HttpServer server {handler, config, logger};
     server.run();
