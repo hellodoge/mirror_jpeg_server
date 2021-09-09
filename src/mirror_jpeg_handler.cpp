@@ -67,6 +67,7 @@ Jpeg decompress_jpeg(bytes_span compressed) {
     err.error_exit = [](j_common_ptr err_info) {
         throw handling_error(get_error_message(err_info));
     };
+	err.output_message = [](auto){};
 
     jpeg_create_decompress(&info);
     jpeg_mem_src(&info, compressed.data(), compressed.size());
@@ -111,6 +112,8 @@ std::vector<uint8_t> compress_jpeg(Jpeg &image) {
     err.error_exit = [](j_common_ptr err_info) {
         throw handling_error(get_error_message(err_info));
     };
+	err.output_message = [](auto){};
+
     jpeg_create_compress(&info);
 
     info.image_width = image.width;
