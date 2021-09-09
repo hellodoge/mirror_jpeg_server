@@ -229,10 +229,29 @@ void HttpServer::run() {
     tcp::acceptor acceptor {context, tcp::endpoint(tcp::v4(), config.port)};
     accept(acceptor, taskConfig, logger);
 
-    // TODO graceful shutdown
-    context.run();
+    // main server loop
+    while (!context.stopped()) {
+		try {
+			context.run();
+		} catch (std::exception &e) {
+			logger.log(Logger::Error, "unhandled exception: ", e.what());
+		}
+		if (!context.stopped())
+			context.restart();
+    }
+
+    // context seems to be stopped, but we need to fulfil
+    // requests of connected clients (might be due to timeout)
+
+    // but first we close gateway for new connections
     acceptor.close();
-    pool.join();
+
+    // then serve the others
+    // (context.run() will return when all the work was finished)
+    context.restart();
+    context.run();
+
+    // threads will be stopped and joined by thread.pool destructor
 }
 
 void HttpServer::stop() {
