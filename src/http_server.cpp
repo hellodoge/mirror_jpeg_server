@@ -179,7 +179,8 @@ void accept(tcp::acceptor &acceptor, TaskConfig &config, Logger &logger) {
     acceptor.async_accept([&](boost::system::error_code ec, tcp::socket socket) {
         accept(acceptor, config, logger);
         if (ec.failed()) {
-            logger.log("error while accepting: ", ec.message());
+        	if (ec.value() != boost::system::errc::operation_canceled)
+        		logger.log("error while accepting: ", ec.message());
             return;
         }
         try {
