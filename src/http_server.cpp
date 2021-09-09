@@ -255,5 +255,6 @@ void HttpServer::run() {
 }
 
 void HttpServer::stop() {
+	logger.log("stopping server");
     context.stop();
 }
