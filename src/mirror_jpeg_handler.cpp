@@ -1,5 +1,7 @@
 #include <cstring>
-#include <cstdio> // https://github.com/libjpeg-turbo/libjpeg-turbo/issues/17
+// it's all just to include libjpeg
+// https://github.com/libjpeg-turbo/libjpeg-turbo/issues/17
+#include <cstdio>
 using FILE = std::FILE;
 using size_t = std::size_t;
 extern "C" {
@@ -40,7 +42,8 @@ static void mirror_image(Jpeg &image) {
         pixel *last = first + image.width - 1;
         // std::reverse cannot be used here, because pixel is VLA
         while (first < last) {
-            // we cannot just assign arrays
+            // swap first and last
+	        // we cannot just assign arrays
             for (size_t i = 0; i < sizeof(pixel); i++) {
                 uint8_t tmp;
                 tmp = (*first)[i];
@@ -61,12 +64,16 @@ Jpeg decompress_jpeg(bytes_span compressed) {
     scope_guard info_destructor([&](){
         jpeg_destroy_decompress(&info);
     });
-    jpeg_error_mgr err {};
 
+    jpeg_error_mgr err {};
     info.err = jpeg_std_error(&err);
+
+    // by default libjpeg will call exit() on failure
+    // we need to overwrite this behaviour with exceptions
     err.error_exit = [](j_common_ptr err_info) {
         throw handling_error(get_error_message(err_info));
     };
+    // suppress printing log messages
 	err.output_message = [](auto){};
 
     jpeg_create_decompress(&info);
@@ -106,12 +113,16 @@ std::vector<uint8_t> compress_jpeg(Jpeg &image) {
     scope_guard info_destructor([&](){
         jpeg_destroy_compress(&info);
     });
-    jpeg_error_mgr err {};
 
+    jpeg_error_mgr err {};
     info.err = jpeg_std_error(&err);
-    err.error_exit = [](j_common_ptr err_info) {
-        throw handling_error(get_error_message(err_info));
-    };
+
+	// by default libjpeg will call exit() on failure
+	// we need to overwrite this behaviour with exceptions
+	err.error_exit = [](j_common_ptr err_info) {
+	    throw handling_error(get_error_message(err_info));
+	};
+	// suppress printing log messages
 	err.output_message = [](auto){};
 
     jpeg_create_compress(&info);
