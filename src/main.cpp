@@ -4,6 +4,7 @@
 
 int main() {
     server::ServerConfig config {
+    	// all the other params are default, see server_config.hpp
         .http={
                 .mime_type="image/jpeg"
         }
