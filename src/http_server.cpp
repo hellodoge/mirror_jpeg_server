@@ -179,8 +179,8 @@ void accept(tcp::acceptor &acceptor, TaskConfig &config, Logger &logger) {
     acceptor.async_accept([&](boost::system::error_code ec, tcp::socket socket) {
         accept(acceptor, config, logger);
         if (ec.failed()) {
-        	if (ec.value() != boost::system::errc::operation_canceled)
-        		logger.log("error while accepting: ", ec.message());
+            if (ec.value() != boost::system::errc::operation_canceled)
+                logger.log("error while accepting: ", ec.message());
             return;
         }
         try {
@@ -232,13 +232,13 @@ void HttpServer::run() {
 
     // main server loop
     while (!context.stopped()) {
-		try {
-			context.run();
-		} catch (std::exception &e) {
-			logger.log(Logger::Error, "unhandled exception: ", e.what());
-		}
-		if (!context.stopped())
-			context.restart();
+        try {
+            context.run();
+        } catch (std::exception &e) {
+            logger.log(Logger::Error, "unhandled exception: ", e.what());
+        }
+        if (!context.stopped())
+            context.restart();
     }
 
     // context seems to be stopped, but we need to fulfil
@@ -256,6 +256,6 @@ void HttpServer::run() {
 }
 
 void HttpServer::stop() {
-	logger.log("stopping server");
+    logger.log("stopping server");
     context.stop();
 }

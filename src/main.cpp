@@ -10,7 +10,7 @@ void wait_for_stop_server_signal(const std::function<void(void)> &callback);
 
 int main() {
     server::ServerConfig config {
-    	// all the other params are default, see server_config.hpp
+        // all the other params are default, see server_config.hpp
         .http={
                 .mime_type="image/jpeg"
         }
@@ -21,28 +21,28 @@ int main() {
 
 
     auto server_thread = std::async(std::launch::async, [&]() {
-	    server.run();
+        server.run();
     });
 
-	wait_for_stop_server_signal([&](){
-		server.stop();
-	});
-	server_thread.get();
+    wait_for_stop_server_signal([&](){
+        server.stop();
+    });
+    server_thread.get();
 }
 
 void wait_for_stop_server_signal(const std::function<void(void)> &callback) {
-	sigset_t sigset;
-	sigemptyset(&sigset);
-	sigaddset(&sigset, SIGTERM);
-	sigaddset(&sigset, SIGINT);
+    sigset_t sigset;
+    sigemptyset(&sigset);
+    sigaddset(&sigset, SIGTERM);
+    sigaddset(&sigset, SIGINT);
 
-	sigprocmask(SIG_BLOCK, &sigset, nullptr /* do not store prev values */);
+    sigprocmask(SIG_BLOCK, &sigset, nullptr /* do not store prev values */);
 
-	int placeholder;
-	sigwait(&sigset, &placeholder);
+    int placeholder;
+    sigwait(&sigset, &placeholder);
 
-	callback();
+    callback();
 
-	// SIGTERM should be called after traffic switching
-	// then, after timeout, SIGKILL (for some corner cases)
+    // SIGTERM should be called after traffic switching
+    // then, after timeout, SIGKILL (for some corner cases)
 }

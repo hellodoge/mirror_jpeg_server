@@ -43,7 +43,7 @@ static void mirror_image(Jpeg &image) {
         // std::reverse cannot be used here, because pixel is VLA
         while (first < last) {
             // swap first and last
-	        // we cannot just assign arrays
+            // we cannot just assign arrays
             for (size_t i = 0; i < sizeof(pixel); i++) {
                 uint8_t tmp;
                 tmp = (*first)[i];
@@ -74,7 +74,7 @@ Jpeg decompress_jpeg(bytes_span compressed) {
         throw handling_error(get_error_message(err_info));
     };
     // suppress printing log messages
-	err.output_message = [](auto){};
+    err.output_message = [](auto){};
 
     jpeg_create_decompress(&info);
     jpeg_mem_src(&info, compressed.data(), compressed.size());
@@ -117,13 +117,13 @@ std::vector<uint8_t> compress_jpeg(Jpeg &image) {
     jpeg_error_mgr err {};
     info.err = jpeg_std_error(&err);
 
-	// by default libjpeg will call exit() on failure
-	// we need to overwrite this behaviour with exceptions
-	err.error_exit = [](j_common_ptr err_info) {
-	    throw handling_error(get_error_message(err_info));
-	};
-	// suppress printing log messages
-	err.output_message = [](auto){};
+    // by default libjpeg will call exit() on failure
+    // we need to overwrite this behaviour with exceptions
+    err.error_exit = [](j_common_ptr err_info) {
+        throw handling_error(get_error_message(err_info));
+    };
+    // suppress printing log messages
+    err.output_message = [](auto){};
 
     jpeg_create_compress(&info);
 
