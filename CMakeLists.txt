@@ -18,6 +18,15 @@ set(SOURCES_HANDLER_MIRROR_JPEG
         include/mirror_jpeg_handler.hpp
         src/mirror_jpeg_handler.cpp)
 
-add_executable(mirror_jpeg_server src/main.cpp ${SOURCES_HTTP_SERVER} ${SOURCES_HANDLER_MIRROR_JPEG})
+set(SOURCES_UTIL
+        include/util/logger.hpp
+        include/util/scope_guard.hpp
+        include/util/size_literals.hpp)
+
+add_executable(mirror_jpeg_server
+        src/main.cpp
+        ${SOURCES_HTTP_SERVER}
+        ${SOURCES_HANDLER_MIRROR_JPEG}
+        ${SOURCES_UTIL})
 
 target_link_libraries(mirror_jpeg_server pthread jpeg)
