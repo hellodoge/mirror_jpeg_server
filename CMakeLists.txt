@@ -9,7 +9,7 @@ find_package(Boost 1.76.0 REQUIRED)
 include_directories(include)
 include_directories(${Boost_INCLUDE_DIR})
 
-set(SOURCES_HTTP_SERVER src/http_server.cpp include/http_server.hpp)
+set(SOURCES_HTTP_SERVER src/http_server.cpp include/http_server.hpp include/server_config.hpp)
 
 set(SOURCES_HANDLER_COMMON include/handler_interface.hpp)
 
