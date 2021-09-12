@@ -89,7 +89,7 @@ namespace {
 
             TaskCallbacks callbacks {
                 .success = [self](std::vector<uint8_t> response_data){
-                    self->task_success(std::move(response_data));
+                    self->task_succeed(std::move(response_data));
                 },
                 .error = [self](TaskErrorType type, std::string_view message){
                     self->task_failed(type, message);
@@ -104,7 +104,7 @@ namespace {
             enqueue_task_callback(body, callbacks);
         }
 
-        void task_success(std::vector<uint8_t> response_data) {
+        void task_succeed(std::vector<uint8_t> response_data) {
             using milliseconds = std::chrono::milliseconds;
             auto in_ms = std::chrono::duration_cast<milliseconds>(clock::now() - enqueued_at);
             logger.log(endpoint, ": processed successfully in ", in_ms.count(), "ms");
