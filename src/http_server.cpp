@@ -52,7 +52,7 @@ namespace {
             : config {config}
             , socket {std::move(socket)}
             , endpoint {this->socket.remote_endpoint()}
-            , timeout {socket.get_executor(), config.timeout}
+            , timeout {this->socket.get_executor(), config.timeout}
             , enqueue_task_callback {config.enqueue_task}
             , logger {config.logger} {
 
